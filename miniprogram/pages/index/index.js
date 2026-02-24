@@ -49,8 +49,6 @@ Page({
       travel_km_roundtrip: 0,
       travel_station_roundtrip: 0,
 
-      // 科室用电口径：每次复诊固定 1 小时（不再需要输入）
-
       // 正畸附件
       elastic_per_day: 0,
       elastic_days: 0,
@@ -77,7 +75,7 @@ Page({
       wx.stopPullDownRefresh()
       return
     }
-  
+
     wx.cloud.callFunction({ name: 'checkAdmin' })
       .then(r => {
         const rr = r.result || {}
@@ -97,13 +95,13 @@ Page({
   onRefresherRefresh() {
     // 开始刷新动画
     this.setData({ refresherTriggered: true })
-  
+
     const openid = wx.getStorageSync('openid')
     if (!openid) {
       this.setData({ refresherTriggered: false })
       return
     }
-  
+
     wx.cloud.callFunction({ name: 'checkAdmin' })
       .then(r => {
         const rr = r.result || {}
@@ -122,7 +120,7 @@ Page({
   onShow() {
     const openid = wx.getStorageSync('openid')
     if (!openid) return
-  
+
     wx.cloud.callFunction({
       name: 'checkAdmin'
     }).then(r => {
@@ -133,7 +131,7 @@ Page({
       })
     })
   },
-  
+
   // ✅ 不自动登录：只从缓存恢复（让“请先登录”能看到）
   onLoad() {
     const openid = wx.getStorageSync('openid')
@@ -144,13 +142,13 @@ Page({
         this.setData({
           isAdmin: !!rr.isAdmin,
           adminRole: rr.role || null
-        })        
+        })
       })
     } else {
       this.setData({ isAdmin: false })
     }
   },
-  
+
   // ✅ 点击按钮才登录
   doLogin() {
     wx.cloud.callFunction({ name: 'login' })
@@ -164,9 +162,8 @@ Page({
           this.setData({
             isAdmin: !!rr.isAdmin,
             adminRole: rr.role || null
-         })
-
-        })        
+          })
+        })
         wx.showToast({ title: '登录成功' })
       })
       .catch(err => {
@@ -178,13 +175,13 @@ Page({
   onSecretTap() {
     const now = Date.now()
     const start = this.data._tapStart || 0
-  
+
     // 3 秒内连续点 7 次触发
     if (!start || now - start > 3000) {
       this.setData({ _tapStart: now, _tapCount: 1 })
       return
     }
-  
+
     const nextCount = (this.data._tapCount || 0) + 1
     if (nextCount >= 7) {
       this.setData({ showHiddenAdmin: true, _tapCount: 0, _tapStart: 0 })
@@ -194,81 +191,81 @@ Page({
     }
   },
 
-    // ✅ 管理员：Excel 批量导入
-    onImportExcel() {
-      if (!this.data.isAdmin) {
-        wx.showToast({ title: '仅管理员可用', icon: 'none' })
-        return
-      }
-  
-      // 选文件（微信聊天/文件管理器）
-      wx.chooseMessageFile({
-        count: 1,
-        type: 'file',
-        success: async (res) => {
-          try {
-            const file = res.tempFiles && res.tempFiles[0]
-            if (!file) return
-  
-            const name = file.name || ''
-            const path = file.path
-            if (!/\.xlsx$/i.test(name)) {
-              wx.showToast({ title: '请上传 .xlsx 文件', icon: 'none' })
-              return
-            }
-  
-            this.setData({ importing: true, importResult: null })
-            wx.showLoading({ title: '上传并导入中...' })
-  
-            // 1) 上传到云存储
-            const cloudPath = `imports/${Date.now()}_${name}`
-            const up = await wx.cloud.uploadFile({
-              cloudPath,
-              filePath: path
-            })
-  
-            if (!up || !up.fileID) {
-              throw new Error('uploadFile failed: no fileID')
-            }
-  
-            // 2) 让云函数去解析 + 批量写库
-            const callRes = await wx.cloud.callFunction({
-              name: 'compute',
-              data: {
-                action: 'importExcel',
-                fileID: up.fileID
-              }
-            })
-  
-            wx.hideLoading()
-  
-            const r = (callRes && callRes.result) || {}
-            if (!r.ok) {
-              wx.showToast({ title: r.error || '导入失败', icon: 'none' })
-              this.setData({ importing: false })
-              return
-            }
-  
-            // r: { ok:true, total, success, failed, errors:[...] }
-            this.setData({ importing: false, importResult: r })
-            wx.showModal({
-              title: '导入完成',
-              content: `共 ${r.total || 0} 行\n成功 ${r.success || 0} 行\n失败 ${r.failed || 0} 行`,
-              showCancel: false
-            })
-          } catch (e) {
-            wx.hideLoading()
-            console.error(e)
-            this.setData({ importing: false })
-            wx.showToast({ title: '导入异常，请看控制台', icon: 'none' })
+  // ✅ 管理员：Excel 批量导入
+  onImportExcel() {
+    if (!this.data.isAdmin) {
+      wx.showToast({ title: '仅管理员可用', icon: 'none' })
+      return
+    }
+
+    // 选文件（微信聊天/文件管理器）
+    wx.chooseMessageFile({
+      count: 1,
+      type: 'file',
+      success: async (res) => {
+        try {
+          const file = res.tempFiles && res.tempFiles[0]
+          if (!file) return
+
+          const name = file.name || ''
+          const path = file.path
+          if (!/\.xlsx$/i.test(name)) {
+            wx.showToast({ title: '请上传 .xlsx 文件', icon: 'none' })
+            return
           }
-        },
-        fail: (err) => {
-          console.error(err)
+
+          this.setData({ importing: true, importResult: null })
+          wx.showLoading({ title: '上传并导入中...' })
+
+          // 1) 上传到云存储
+          const cloudPath = `imports/${Date.now()}_${name}`
+          const up = await wx.cloud.uploadFile({
+            cloudPath,
+            filePath: path
+          })
+
+          if (!up || !up.fileID) {
+            throw new Error('uploadFile failed: no fileID')
+          }
+
+          // 2) 让云函数去解析 + 批量写库
+          // ⚠️ 这里你当前代码仍调用 compute（旧逻辑遗留）。本次 Step 3 不动它。
+          const callRes = await wx.cloud.callFunction({
+            name: 'adminImportExcel',
+            data: {
+              fileID: up.fileID
+            }
+          })
+
+          wx.hideLoading()
+
+          const r = (callRes && callRes.result) || {}
+          if (!r.ok) {
+            wx.showToast({ title: r.error || '导入失败', icon: 'none' })
+            this.setData({ importing: false })
+            return
+          }
+
+          // r: { ok:true, total, success, failed, errors:[...] }
+          this.setData({ importing: false, importResult: r })
+          wx.showModal({
+            title: '导入完成',
+            content: `共 ${r.total || 0} 行\n成功 ${r.success || 0} 行\n失败 ${r.failed || 0} 行`,
+            showCancel: false
+          })
+        } catch (e) {
+          wx.hideLoading()
+          console.error(e)
+          this.setData({ importing: false })
+          wx.showToast({ title: '导入异常，请看控制台', icon: 'none' })
         }
-      })
-    },
-    
+      },
+      fail: (err) => {
+        console.error(err)
+      }
+    })
+  },
+
   // ---------- 输入绑定 ----------
   _setNumber(path, val) {
     const num = Number(val)
@@ -306,106 +303,65 @@ Page({
     })
   },
 
-  // ---------- 核心计算 ----------
+  // ---------- 核心计算（Step 3：改为云端 computeAndSave） ----------
   onCompute() {
-    const inps = this.data.inputs
+    const inps = this.data.inputs || {}
     const n = this._safeInt(inps.n)
     const x = this._safeInt(inps.x)
     const k = this._safeInt(inps.k, 8)
 
-    const brandIndex = this.data.brandIndex // 0/1
-    const ageIndex = this.data.ageIndex     // 0/1
 
-    // 牙套每套排放因子（g/套）
-    const alignerFactor = this._getAlignerFactor(brandIndex, ageIndex)
+    wx.showLoading({ title: '计算中...' })
 
-    const rows = []
-    const catSum = {}
-
-    let total = 0
-
-    // --- 影像学：按 n / n+1 ---
-    total += this._add(rows, catSum, '影像学检验', '全景片', (n + 1), 2.98)
-    total += this._add(rows, catSum, '影像学检验', 'CBCT', n, 6.86)
-    total += this._add(rows, catSum, '影像学检验', '头颅侧位片', (n + 1), 1.49)
-    total += this._add(rows, catSum, '影像学检验', '正位片', n, 1.49)
-    total += this._add(rows, catSum, '影像学检验', '正畸人像照（一套6张）', n, 0.045)
-    total += this._add(rows, catSum, '影像学检验', '口内照摄影（一套6张）', (n + 1), 0.045)
-
-    // --- 实验室/洗牙：次数 ---
-    total += this._add(rows, catSum, '实验室检验', '血常规＋传染病四项', this._safeInt(inps.lab_blood_count), 770)
-    total += this._add(rows, catSum, '洗牙', '洗牙', this._safeInt(inps.cleaning_count), 1250)
-
-    // --- 牙套：k*x；粘接材料：k（仅初诊一次） ---
-    total += this._add(rows, catSum, '牙套（算运输）', `牙套（每套）${this._brandAgeLabel(brandIndex, ageIndex)}`, (k * x), alignerFactor)
-    total += this._add(rows, catSum, '粘接材料（同牙套）', `粘接材料（每套）${this._brandAgeLabel(brandIndex, ageIndex)}`, k, alignerFactor)
-
-    // --- 一次性耗材 ---
-    total += this._add(rows, catSum, '一次性医疗耗材', '无菌手套', x, 65)
-    total += this._add(rows, catSum, '一次性医疗耗材', '医用口罩（分摊0.1x）', 0.1 * x, 19.2)
-    total += this._add(rows, catSum, '一次性医疗耗材', '口镜（每患者1个）', 1, 91.66)
-    total += this._add(rows, catSum, '一次性医疗耗材', '吸唾管', x, 45)
-    total += this._add(rows, catSum, '一次性医疗耗材', '消毒棉球（1颗，2x）', 2 * x, 6.45)
-
-    // 事件型：疗程总数
-    total += this._add(rows, catSum, '一次性医疗耗材', '舌侧扣（一个）', this._safeInt(inps.lingual_button_count), 6)
-    total += this._add(rows, catSum, '一次性医疗耗材', '支抗钉（一个）', this._safeInt(inps.miniscrew_count), 15)
-
-    // --- 交通（地铁按站） ---
-    total += this._computeTravel(rows, catSum, x)
-
-    // --- 科室用电：每次复诊固定 1 小时 ---
-    total += this._add(rows, catSum, '科室用电', '科室用电（每次按1小时）', 1 * x, 330)
-
-    // --- 正畸附件 ---
-    const elasticTotal = this._safeInt(inps.elastic_per_day) * this._safeInt(inps.elastic_days)
-    total += this._add(rows, catSum, '正畸附件', '正畸皮筋（0.75g/条）', elasticTotal, 0.75)
-    total += this._add(rows, catSum, '正畸附件', '牙套收纳盒（70g/个）', this._safeInt(inps.case_box, 1), 70)
-    total += this._add(rows, catSum, '正畸附件', '咬胶（55g/个）', this._safeInt(inps.chewie, 1), 55)
-
-    const categorySums = Object.keys(catSum).map(cat => ({
-      category: cat,
-      g: this._fmt(catSum[cat])
-    })).sort((a, b) => Number(b.g) - Number(a.g))
-
-    const finalResult = {
-      ready: true,
-      total_g: this._fmt(total),
-      total_kg: this._fmt(total / 1000),
-      categorySums,
-      rows: rows.filter(r => Number(r.g) !== 0)
+    // ✅ 关键：把 travelModeIndex 合并进 inputs，云端 compute 才能按交通方式分支
+    const payloadInputs = {
+      ...this.data.inputs,
+      travelModeIndex: this.data.travelModeIndex
     }
 
-    // 首页预览
-    this.setData({ result: finalResult })
-
-    // 存缓存（结果页读取）
-    wx.setStorageSync('calc_result', finalResult)
-    wx.setStorageSync('calc_inputs', {
-      n, x, k,
-      travelModeIndex: this.data.travelModeIndex,
-      travel_km_roundtrip: this.data.inputs.travel_km_roundtrip,
-      travel_station_roundtrip: this.data.inputs.travel_station_roundtrip
-    })
-
-    // 写库：成功后跳转
     wx.cloud.callFunction({
-      name: 'saveRecord',
+      name: 'computeAndSave',
       data: {
-        inputs: this.data.inputs,
-        result: finalResult
+        inputs: payloadInputs,
+        brandIndex: this.data.brandIndex,
+        ageIndex: this.data.ageIndex
       }
     }).then(res => {
-      console.log('保存成功', res)
+      wx.hideLoading()
+      const r = res.result || {}
+
+      if (!r.ok) {
+        wx.showToast({ title: r.error || '计算失败', icon: 'none' })
+        return
+      }
+
+      const finalResult = r.result
+
+      // 首页预览
+      this.setData({ result: finalResult })
+
+      // 存缓存（结果页读取）
+      wx.setStorageSync('calc_result', finalResult)
+      wx.setStorageSync('calc_inputs', {
+        n, x, k,
+        travelModeIndex: this.data.travelModeIndex,
+        travel_km_roundtrip: this.data.inputs.travel_km_roundtrip,
+        travel_station_roundtrip: this.data.inputs.travel_station_roundtrip
+      })
+      wx.setStorageSync('calc_meta', {
+        brandIndex: this.data.brandIndex,
+        ageIndex: this.data.ageIndex
+      })
+
       wx.navigateTo({ url: '/pages/results/results' })
     }).catch(err => {
-      console.error('保存失败', err)
-      wx.showToast({ title: '保存失败', icon: 'none' })
-      wx.navigateTo({ url: '/pages/results/results' })
+      wx.hideLoading()
+      console.error('computeAndSave failed:', err)
+      wx.showToast({ title: '计算失败', icon: 'none' })
     })
   },
 
-  // ---------- 工具函数 ----------
+  // ---------- 工具函数（旧的本地计算已不再使用，但保留不影响运行） ----------
   _add(rows, catSum, category, name, count, gPerUnit) {
     const c = Number(count)
     const g = Number(gPerUnit) * c
@@ -449,7 +405,7 @@ Page({
   goHiddenAdmin() {
     wx.navigateTo({ url: '../adminRequest/adminRequest' })
   },
-  
+
   _getAlignerFactor(brandIndex, ageIndex) {
     const table = {
       '0_0': 11.0147,

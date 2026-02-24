@@ -3,6 +3,7 @@
 <view class="card">
   <view class="title">计算结果</view>
   <view class="sub">结果单位：gCO₂（同时显示 kgCO₂）</view>
+  <view wx:if="{{metaText}}" class="sub"> {{metaText}} </view>
 </view>
 
 <view wx:if="{{!result.ready}}" class="card">
@@ -112,7 +113,7 @@
         C_acc = 0.75×(e_day×e_days) + 70×N_case + 55×N_chewie
       </text>
 
-      <text class="formula牙期-text">
+      <text class="formula-text">
         合计：
         C_total = C_img + C_lab + C_align + C_bond + C_disposable + C_travel + C_clinic + C_acc
       </text>

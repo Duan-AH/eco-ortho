@@ -20,7 +20,16 @@
       <view class="header-actions">
         <button size="mini" bindtap="refresh">刷新</button>
         <button size="mini" bindtap="onExportExcel">导出Excel</button>
-        <!-- 只有总管理员可见 -->
+
+        <!-- ⚠️ 危险操作：所有管理员都可见 -->
+        <button
+          size="mini"
+          class="danger"
+          bindtap="onDeleteAll">
+          全部删除
+        </button>
+
+        <!-- 管理管理员：仍然只给总管理员 -->
         <button wx:if="{{adminRole === 'super_admin'}}"
                 size="mini"
                 bindtap="goAdminManage">
@@ -32,68 +41,41 @@
     <scroll-view scroll-x="true" class="table-scroll">
       <view class="table">
 
-        <!-- 表头 -->
         <view class="tr th">
           <view class="td w-id">记录ID</view>
           <view class="td w-time">创建时间</view>
           <view class="td w-openid">用户ID</view>
-          <view class="td w-num">总排放(g)</view>
-          <view class="td w-num">总排放(kg)</view>
-
-          <view class="td w-s">n(初诊)</view>
-          <view class="td w-s">x(复诊)</view>
-          <view class="td w-s">k(套数)</view>
-
-          <view class="td w-m">交通方式</view>
-          <view class="td w-m">往返公里数</view>
-          <view class="td w-m">往返站数</view>
-
-          <view class="td w-m">血常规次数</view>
-          <view class="td w-m">洗牙次数</view>
-
-          <view class="td w-m">皮筋/天</view>
-          <view class="td w-m">皮筋天数</view>
-
-          <view class="td w-s">收纳盒数</view>
-          <view class="td w-s">咬胶数</view>
-
-          <view class="td w-m">舌侧扣数</view>
-          <view class="td w-m">支抗钉数</view>
-
+          <view class="td w-m">牙套品牌</view>
+          <view class="td w-m">替牙期</view>
+          <view class="td w-s">n</view>
+          <view class="td w-s">x</view>
+          <view class="td w-s">k</view>
+          <view class="td w-s">总排放(kg)</view>
           <view class="td w-op">操作</view>
         </view>
 
-        <!-- 数据行 -->
         <view class="tr" wx:for="{{records}}" wx:key="_id">
           <view class="td w-id">{{item._id}}</view>
-          <view class="td w-time">{{item.createdAt}}</view>
+          <view class="td w-time">{{item.createdAtBJ}}</view>
           <view class="td w-openid">{{item.openid}}</view>
-          <view class="td w-num">{{item.result.total_g}}</view>
-          <view class="td w-num">{{item.result.total_kg}}</view>
-
+          <view class="td w-m">{{item.brandLabel}}</view>
+          <view class="td w-m">{{item.ageLabel}}</view>
           <view class="td w-s">{{item.inputs.n}}</view>
           <view class="td w-s">{{item.inputs.x}}</view>
           <view class="td w-s">{{item.inputs.k}}</view>
-
-          <view class="td w-m">{{item.inputs.travelModeIndex}}</view>
-          <view class="td w-m">{{item.inputs.travel_km_roundtrip}}</view>
-          <view class="td w-m">{{item.inputs.travel_station_roundtrip}}</view>
-
-          <view class="td w-m">{{item.inputs.lab_blood_count}}</view>
-          <view class="td w-m">{{item.inputs.cleaning_count}}</view>
-
-          <view class="td w-m">{{item.inputs.elastic_per_day}}</view>
-          <view class="td w-m">{{item.inputs.elastic_days}}</view>
-
-          <view class="td w-s">{{item.inputs.case_box}}</view>
-          <view class="td w-s">{{item.inputs.chewie}}</view>
-
-          <view class="td w-m">{{item.inputs.lingual_button_count}}</view>
-          <view class="td w-m">{{item.inputs.miniscrew_count}}</view>
+          <view class="td w-s">{{item.result.total_kg}}</view>
 
           <view class="td w-op">
-            <button size="mini" data-id="{{item._id}}" bindtap="onDelete">删除</button>
+            <button size="mini"
+                    data-id="{{item._id}}"
+                    bindtap="onDelete">
+              删除
+            </button>
           </view>
+        </view>
+
+        <view wx:if="{{records.length===0}}" class="empty">
+          <text style="color:#999;">暂无数据</text>
         </view>
 
       </view>

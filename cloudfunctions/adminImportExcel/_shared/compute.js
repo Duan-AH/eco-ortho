@@ -1,4 +1,5 @@
-// cloudfunctions/adminImportExcel/compute.js
+// 复制件，需同步版本！
+const COMPUTE_VERSION = 'compute_v2_2026-02-24'
 
 function safeInt(v, def = 0) {
   const n = parseInt(v, 10)
@@ -15,19 +16,15 @@ function fmt(num) {
 }
 
 function getAlignerFactor(brandIndex, ageIndex) {
-  // brandIndex: 1=时代天使 2=隐适美（Excel 用 1/2）
-  // ageIndex: 1=未结束 2=已结束（Excel 用 1/2）
-  // 转成你原来前端的 0/1
-  const b = brandIndex === 2 ? 1 : 0
-  const a = ageIndex === 2 ? 1 : 0
-
+  // brandIndex: 0=时代天使 1=隐适美（前端用 0/1）
+  // ageIndex:   0=未结束   1=已结束（前端用 0/1）
   const table = {
     '0_0': 11.0147,
     '0_1': 10.4872,
     '1_0': 12.7012,
     '1_1': 14.8202
   }
-  return table[`${b}_${a}`]
+  return table[`${brandIndex}_${ageIndex}`]
 }
 
 function add(rows, catSum, category, name, count, gPerUnit) {
@@ -38,9 +35,9 @@ function add(rows, catSum, category, name, count, gPerUnit) {
   return g
 }
 
-function computeTravel({ travelModeIndex, travel_km_roundtrip, travel_station_roundtrip }, rows, catSum, x) {
-  // travelModeIndex（Excel）：0不计算 1油车 2电车 3公交/电瓶车 4地铁
-  const mode = safeInt(travelModeIndex, 0)
+function computeTravel(inputs, rows, catSum, x) {
+  // travelModeIndex（前端）：0不计算 1油车 2电车 3公交/电瓶车 4地铁
+  const mode = safeInt(inputs.travelModeIndex, 0)
 
   if (mode === 0) {
     add(rows, catSum, '交通碳排放', '交通（不计）', 0, 0)
@@ -49,19 +46,19 @@ function computeTravel({ travelModeIndex, travel_km_roundtrip, travel_station_ro
 
   let g = 0
   if (mode === 1) {
-    const km = safeNumber(travel_km_roundtrip)
+    const km = safeNumber(inputs.travel_km_roundtrip)
     g = 240 * km * x
     rows.push({ category: '交通碳排放', name: '私家车（油）', count: fmt(km * x) + ' km', g: fmt(g) })
   } else if (mode === 2) {
-    const km = safeNumber(travel_km_roundtrip)
+    const km = safeNumber(inputs.travel_km_roundtrip)
     g = 60 * km * x
     rows.push({ category: '交通碳排放', name: '私家车（电）', count: fmt(km * x) + ' km', g: fmt(g) })
   } else if (mode === 3) {
-    const km = safeNumber(travel_km_roundtrip)
+    const km = safeNumber(inputs.travel_km_roundtrip)
     g = 10 * km * x
     rows.push({ category: '交通碳排放', name: '公交车/电瓶车', count: fmt(km * x) + ' km', g: fmt(g) })
   } else if (mode === 4) {
-    const st = safeInt(travel_station_roundtrip)
+    const st = safeInt(inputs.travel_station_roundtrip)
     g = 100 * st * x
     rows.push({ category: '交通碳排放', name: '地铁（每站）', count: fmt(st * x) + ' 站', g: fmt(g) })
   }
@@ -70,8 +67,8 @@ function computeTravel({ travelModeIndex, travel_km_roundtrip, travel_station_ro
   return g
 }
 
-// inputs：就是你首页 inputs 那一套（我们下一步会规定 Excel 每列怎么映射到它）
-// brandIndex/ageIndex：Excel 用 1/2
+// inputs：就是首页 inputs 那一套
+// brandIndex/ageIndex：前端用 0/1
 function computeResult(inputs, brandIndex, ageIndex) {
   const inps = inputs || {}
 
@@ -83,7 +80,7 @@ function computeResult(inputs, brandIndex, ageIndex) {
   const catSum = {}
   let total = 0
 
-  // —— 影像学（和你前端一致）——
+  // —— 影像学 ——
   total += add(rows, catSum, '影像学检验', '全景片', (n + 1), 2.98)
   total += add(rows, catSum, '影像学检验', 'CBCT', n, 6.86)
   total += add(rows, catSum, '影像学检验', '头颅侧位片', (n + 1), 1.49)
@@ -95,7 +92,7 @@ function computeResult(inputs, brandIndex, ageIndex) {
   total += add(rows, catSum, '实验室检验', '血常规＋传染病四项', safeInt(inps.lab_blood_count), 770)
   total += add(rows, catSum, '洗牙', '洗牙', safeInt(inps.cleaning_count), 1250)
 
-  // —— 牙套/粘接材料 ——（和你前端一致）
+  // —— 牙套/粘接材料 ——
   const alignerFactor = getAlignerFactor(brandIndex, ageIndex)
   total += add(rows, catSum, '牙套（算运输）', '牙套（每套）', (k * x), alignerFactor)
   total += add(rows, catSum, '粘接材料（同牙套）', '粘接材料（每套）', k, alignerFactor)
@@ -110,7 +107,7 @@ function computeResult(inputs, brandIndex, ageIndex) {
   total += add(rows, catSum, '一次性医疗耗材', '舌侧扣（一个）', safeInt(inps.lingual_button_count), 6)
   total += add(rows, catSum, '一次性医疗耗材', '支抗钉（一个）', safeInt(inps.miniscrew_count), 15)
 
-  // —— 交通 ——（和你前端一致）
+  // —— 交通 ——
   total += computeTravel(inps, rows, catSum, x)
 
   // —— 科室用电：每次复诊固定 1 小时 ——
@@ -122,10 +119,9 @@ function computeResult(inputs, brandIndex, ageIndex) {
   total += add(rows, catSum, '正畸附件', '牙套收纳盒（70g/个）', safeInt(inps.case_box, 1), 70)
   total += add(rows, catSum, '正畸附件', '咬胶（55g/个）', safeInt(inps.chewie, 1), 55)
 
-  const categorySums = Object.keys(catSum).map(cat => ({
-    category: cat,
-    g: fmt(catSum[cat])
-  })).sort((a, b) => Number(b.g) - Number(a.g))
+  const categorySums = Object.keys(catSum)
+    .map(cat => ({ category: cat, g: fmt(catSum[cat]) }))
+    .sort((a, b) => Number(b.g) - Number(a.g))
 
   return {
     ready: true,
@@ -136,6 +132,6 @@ function computeResult(inputs, brandIndex, ageIndex) {
   }
 }
 
-module.exports = {
-  computeResult
-}
+module.exports = { computeResult }
+
+module.exports = { computeResult, COMPUTE_VERSION }

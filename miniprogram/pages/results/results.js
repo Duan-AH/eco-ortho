@@ -7,6 +7,7 @@ Page({
       categorySums: [],
       rows: []
     },
+    metaText: '',
     formula: {
       travel: 'C_travel = 0'
     }
@@ -17,6 +18,17 @@ Page({
     if (res && res.ready) {
       this.setData({ result: res });
     }
+
+    const meta = wx.getStorageSync('calc_meta') || {}
+    const brandIndex = Number(meta.brandIndex ?? 0)
+    const ageIndex = Number(meta.ageIndex ?? 0)
+
+    const brandLabel = brandIndex === 1 ? '隐适美' : '时代天使'
+    const ageLabel = ageIndex === 1 ? '已结束' : '未结束'
+
+    this.setData({
+      metaText: `替牙期：${ageLabel}  ｜  品牌：${brandLabel}`
+    })
 
     // 从缓存读取输入，用于展示公式变量（尤其交通）
     // 你需要在 index.js 计算后也把 inputs 存一份（见下方说明）

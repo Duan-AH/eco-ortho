@@ -1,3 +1,4 @@
+const { callFn, call } = require('../../api/call')
 Page({
   data: {
     loading: true,
@@ -18,28 +19,27 @@ Page({
     this.refreshRequests()
   },
 
-  refresh() {
+  async refresh() {
     this.setData({ loading: true, error: '' })
-    return wx.cloud.callFunction({
-      name: 'superManageAdmins',
-      data: { action: 'list' }
-    }).then(res => {
-      const r = res.result || {}
+    try {
+      const r = await call('admin', 'list')
       this.setData({
         loading: false,
-        ok: !!r.ok,
-        error: r.error || '',
+        ok: true,
+        error: '',
         admins: r.admins || []
       })
-    }).catch(err => {
-      console.error(err)
+      return r
+    } catch (e) {
+      console.error(e)
       this.setData({
         loading: false,
         ok: false,
-        error: '调用失败，请看控制台',
+        error: e.message || '调用失败，请看控制台',
         admins: []
       })
-    })
+      return null
+    }
   },
 
   onInputNewOpenid(e) {
@@ -50,7 +50,7 @@ Page({
     this.setData({ newRoleIndex: Number(e.detail.value) })
   },
   
-  onAddAdmin() {
+  async onAddAdmin() {
     const openid = (this.data.newOpenid || '').trim()
     const role = this.data.roleOptions[this.data.newRoleIndex] || 'admin'
     if (!openid) {
@@ -59,24 +59,17 @@ Page({
     }
   
     wx.showLoading({ title: '添加中...' })
-    wx.cloud.callFunction({
-      name: 'superManageAdmins',
-      data: { action: 'add', openid, role }
-    }).then(res => {
+    try {
+      await call('admin', 'add', { openid, role })
       wx.hideLoading()
-      const r = res.result || {}
-      if (!r.ok) {
-        wx.showToast({ title: r.error || '添加失败', icon: 'none' })
-        return
-      }
       wx.showToast({ title: '已添加/已更新' })
       this.setData({ newOpenid: '', newRoleIndex: 0 })
-      this.refresh()
-    }).catch(err => {
+      await this.refresh()
+    } catch (e) {
       wx.hideLoading()
-      console.error(err)
-      wx.showToast({ title: '添加失败', icon: 'none' })
-    })
+      console.error(e)
+      wx.showToast({ title: e.message || '添加失败', icon: 'none' })
+    }
   },
   
   onRemoveAdmin(e) {
@@ -86,47 +79,39 @@ Page({
     wx.showModal({
       title: '确认删除管理员？',
       content: `openid: ${openid}`,
-      success: (r) => {
+      success: async (r) => {
         if (!r.confirm) return
   
         wx.showLoading({ title: '删除中...' })
-        wx.cloud.callFunction({
-          name: 'superManageAdmins',
-          data: { action: 'remove', openid }
-        }).then(res => {
+        try {
+          await call('admin', 'remove', { openid })
           wx.hideLoading()
-          const rr = res.result || {}
-          if (!rr.ok) {
-            wx.showToast({ title: rr.error || '删除失败', icon: 'none' })
-            return
-          }
           wx.showToast({ title: '已删除' })
-          this.refresh()
-        }).catch(err => {
+          await this.refresh()
+        } catch (e) {
           wx.hideLoading()
-          console.error(err)
-          wx.showToast({ title: '删除失败', icon: 'none' })
-        })
+          console.error(e)
+          wx.showToast({ title: e.message || '删除失败', icon: 'none' })
+        }
       }
     })
   },
 
-  refreshRequests() {
+  async refreshRequests() {
     this.setData({ reqLoading: true, reqError: '' })
-    return wx.cloud.callFunction({
-      name: 'superManageAdmins',
-      data: { action: 'listRequests' }
-    }).then(res => {
-      const r = res.result || {}
+    try {
+      const r = await call('admin', 'listRequests')
       this.setData({
         reqLoading: false,
         requests: r.requests || [],
-        reqError: r.error || ''
+        reqError: ''
       })
-    }).catch(err => {
-      console.error(err)
-      this.setData({ reqLoading: false, reqError: '加载申请失败', requests: [] })
-    })
+      return r
+    } catch (e) {
+      console.error(e)
+      this.setData({ reqLoading: false, reqError: e.message || '加载申请失败', requests: [] })
+      return null
+    }
   },
   
   onApproveRequest(e) {
@@ -134,27 +119,20 @@ Page({
     wx.showModal({
       title: '通过申请？',
       content: '通过后将加入管理员（admin）',
-      success: (r) => {
+      success: async (r) => {
         if (!r.confirm) return
         wx.showLoading({ title: '处理中...' })
-        wx.cloud.callFunction({
-          name: 'superManageAdmins',
-          data: { action: 'approveRequest', requestId }
-        }).then(res => {
+        try {
+          await call('admin', 'approveRequest', { requestId })
           wx.hideLoading()
-          const rr = res.result || {}
-          if (!rr.ok) {
-            wx.showToast({ title: rr.error || '失败', icon: 'none' })
-            return
-          }
           wx.showToast({ title: '已通过', icon: 'none' })
-          this.refresh()
-          this.refreshRequests()
-        }).catch(err => {
+          await this.refresh()
+          await this.refreshRequests()
+        } catch (e) {
           wx.hideLoading()
-          console.error(err)
-          wx.showToast({ title: '失败', icon: 'none' })
-        })
+          console.error(e)
+          wx.showToast({ title: e.message || '失败', icon: 'none' })
+        }
       }
     })
   },
@@ -164,26 +142,19 @@ Page({
     wx.showModal({
       title: '拒绝申请？',
       content: '拒绝后不会加入管理员',
-      success: (r) => {
+      success: async (r) => {
         if (!r.confirm) return
         wx.showLoading({ title: '处理中...' })
-        wx.cloud.callFunction({
-          name: 'superManageAdmins',
-          data: { action: 'rejectRequest', requestId }
-        }).then(res => {
+        try {
+          await call('admin', 'rejectRequest', { requestId })
           wx.hideLoading()
-          const rr = res.result || {}
-          if (!rr.ok) {
-            wx.showToast({ title: rr.error || '失败', icon: 'none' })
-            return
-          }
           wx.showToast({ title: '已拒绝', icon: 'none' })
-          this.refreshRequests()
-        }).catch(err => {
+          await this.refreshRequests()
+        } catch (e) {
           wx.hideLoading()
-          console.error(err)
-          wx.showToast({ title: '失败', icon: 'none' })
-        })
+          console.error(e)
+          wx.showToast({ title: e.message || '失败', icon: 'none' })
+        }
       }
     })
   },
@@ -191,7 +162,6 @@ Page({
   onRefresherRefresh() {
     this.setData({ refresherTriggered: true })
   
-    // 同时刷新：管理员列表 + 待审核申请
     Promise.all([
       this.refresh(),
       this.refreshRequests()
@@ -200,29 +170,22 @@ Page({
     })
   },
 
-  onRemarkBlur(e) {
+  async onRemarkBlur(e) {
     const openid = (e.currentTarget.dataset.openid || '').trim()
     const remark = (e.detail.value || '').trim()
     if (!openid) return
   
-    wx.cloud.callFunction({
-      name: 'superManageAdmins',
-      data: { action: 'updateRemark', openid, remark }
-    }).then(res => {
-      const r = res.result || {}
-      if (!r.ok) {
-        wx.showToast({ title: r.error || '保存失败', icon: 'none' })
-        return
-      }
+    try {
+      await call('admin', 'updateRemark', { openid, remark })
   
       // ✅ 本地直接更新，不用整页刷新
       const next = (this.data.admins || []).map(a =>
         a.openid === openid ? { ...a, remark } : a
       )
       this.setData({ admins: next })
-    }).catch(err => {
-      console.error(err)
-      wx.showToast({ title: '保存失败', icon: 'none' })
-    })
+    } catch (e) {
+      console.error(e)
+      wx.showToast({ title: e.message || '保存失败', icon: 'none' })
+    }
   }
 })

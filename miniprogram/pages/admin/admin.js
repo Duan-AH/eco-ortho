@@ -1,3 +1,5 @@
+const { callFn } = require('../../api/call')
+
 Page({
   data: {
     loading: true,
@@ -11,46 +13,38 @@ Page({
 
   onLoad() {
     this.refresh()
-    wx.cloud.callFunction({ name: 'checkAdmin' }).then(r => {
-      const rr = r.result || {}
-      this.setData({ adminRole: rr.role || null })
+    callFn('auth', { action: 'whoami' })
+    .then(rr => {
+      this.setData({
+        isAdmin: !!rr.isAdmin,
+        adminRole: rr.role || null
+      })
     })
-  },
+    .catch(err => console.error(err))  },
 
   refresh() {
     this.setData({ loading: true, error: '' })
 
-    return wx.cloud.callFunction({
-      name: 'adminListRecords'
-    }).then(res => {
-      const r = res.result || {}
-      if (!r.ok) {
+    return callFn('records', { action: 'admin.list' })
+      .then(r => {
+        this.setData({
+          loading: false,
+          ok: true,
+          error: '',
+          total: r.total || 0,
+          records: r.records || []
+        })
+      })
+      .catch(err => {
+        console.error(err)
         this.setData({
           loading: false,
           ok: false,
-          error: r.error || '加载失败',
+          error: err.message || '调用失败',
           total: 0,
           records: []
         })
-        return
-      }
-
-      this.setData({
-        loading: false,
-        ok: true,
-        total: r.total || 0,
-        records: r.records || []
       })
-    }).catch(err => {
-      console.error(err)
-      this.setData({
-        loading: false,
-        ok: false,
-        error: '调用失败',
-        total: 0,
-        records: []
-      })
-    })
   },
 
   onDelete(e) {
@@ -61,24 +55,21 @@ Page({
       success: (r) => {
         if (!r.confirm) return
 
-        wx.cloud.callFunction({
-          name: 'adminDeleteRecord',
-          data: { recordId }
-        }).then(res => {
-          const rr = res.result || {}
-          if (!rr.ok) {
-            wx.showToast({ title: rr.error || '删除失败', icon: 'none' })
-            return
-          }
-
-          wx.showToast({ title: '已删除' })
-          this.refresh()
-        })
+        callFn('records', { action: 'admin.delete', recordId })
+          .then(() => {
+            wx.showToast({ title: '已删除' })
+            this.refresh()
+          })
+          .catch(err => {
+            console.error(err)
+            wx.showToast({ title: err.message || '删除失败', icon: 'none' })
+          })
       }
     })
   },
 
-  // ⚠️ 所有管理员都可执行
+
+  // ⚠️ 所有管理员都可执行（建议后续收紧权限，但这步先不动业务）
   onDeleteAll() {
     wx.showModal({
       title: '危险操作',
@@ -95,24 +86,17 @@ Page({
             if (!r2.confirm) return
 
             wx.showLoading({ title: '删除中...' })
-            wx.cloud.callFunction({
-              name: 'adminDeleteAllRecords',
-              data: { confirm: 'DELETE_ALL' }
-            }).then(res => {
-              wx.hideLoading()
-              const rr = res.result || {}
-              if (!rr.ok) {
-                wx.showToast({ title: rr.error || '删除失败', icon: 'none' })
-                return
-              }
-
-              wx.showToast({ title: `已删除 ${rr.deleted || 0} 条`, icon: 'none' })
-              this.refresh()
-            }).catch(err => {
-              wx.hideLoading()
-              console.error(err)
-              wx.showToast({ title: '删除失败', icon: 'none' })
-            })
+            callFn('records', { action: 'admin.deleteAll', confirm: 'DELETE_ALL' })
+              .then(rr => {
+                wx.hideLoading()
+                wx.showToast({ title: `已删除 ${rr.deleted || 0} 条`, icon: 'none' })
+                this.refresh()
+              })
+              .catch(err => {
+                wx.hideLoading()
+                console.error(err)
+                wx.showToast({ title: err.message || '删除失败', icon: 'none' })
+              })
           }
         })
       }
@@ -127,8 +111,6 @@ Page({
   },
 
   goAdminManage() {
-    wx.navigateTo({
-      url: '/pages/adminManage/adminManage'
-    })
+    wx.navigateTo({ url: '/pages/adminManage/adminManage' })
   }
 })

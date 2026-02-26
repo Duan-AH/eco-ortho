@@ -1,3 +1,5 @@
+const { callFn } = require('../../api/call')
+
 Page({
   goAdmin() {
     wx.navigateTo({ url: '/pages/admin/admin' })
@@ -76,9 +78,8 @@ Page({
       return
     }
 
-    wx.cloud.callFunction({ name: 'checkAdmin' })
-      .then(r => {
-        const rr = r.result || {}
+    callFn('auth', { action: 'whoami' })
+      .then(rr => {
         this.setData({
           isAdmin: !!rr.isAdmin,
           adminRole: rr.role || null
@@ -102,9 +103,8 @@ Page({
       return
     }
 
-    wx.cloud.callFunction({ name: 'checkAdmin' })
-      .then(r => {
-        const rr = r.result || {}
+    callFn('auth', { action: 'whoami' })
+      .then(rr => {
         this.setData({
           isAdmin: !!rr.isAdmin,
           adminRole: rr.role || null
@@ -119,17 +119,19 @@ Page({
 
   onShow() {
     const openid = wx.getStorageSync('openid')
-    if (!openid) return
+    if (!openid) {
+      this.setData({ isAdmin: false, adminRole: null })
+      return
+    }
 
-    wx.cloud.callFunction({
-      name: 'checkAdmin'
-    }).then(r => {
-      const rr = r.result || {}
-      this.setData({
-        isAdmin: !!rr.isAdmin,
-        adminRole: rr.role || null
+    callFn('auth', { action: 'whoami' })
+      .then(rr => {
+        this.setData({
+          isAdmin: !!rr.isAdmin,
+          adminRole: rr.role || null
+        })
       })
-    })
+      .catch(err => console.error(err))
   },
 
   // ✅ 不自动登录：只从缓存恢复（让“请先登录”能看到）
@@ -137,39 +139,40 @@ Page({
     const openid = wx.getStorageSync('openid')
     if (openid) {
       this.setData({ openid })
-      wx.cloud.callFunction({ name: 'checkAdmin' }).then(r => {
-        const rr = r.result || {}
-        this.setData({
-          isAdmin: !!rr.isAdmin,
-          adminRole: rr.role || null
-        })
-      })
-    } else {
-      this.setData({ isAdmin: false })
-    }
-  },
-
-  // ✅ 点击按钮才登录
-  doLogin() {
-    wx.cloud.callFunction({ name: 'login' })
-      .then(res => {
-        const openid = res.result.openid
-        console.log('登录成功 openid:', openid)
-        wx.setStorageSync('openid', openid)
-        this.setData({ openid })
-        wx.cloud.callFunction({ name: 'checkAdmin' }).then(r => {
-          const rr = r.result || {}
+      callFn('auth', { action: 'whoami' })
+        .then(rr => {
           this.setData({
             isAdmin: !!rr.isAdmin,
             adminRole: rr.role || null
           })
         })
-        wx.showToast({ title: '登录成功' })
+        .catch(err => console.error(err))
+    } else {
+      this.setData({ isAdmin: false, adminRole: null })
+    }
+  },
+
+  // ✅ 点击按钮才登录
+  async doLogin() {
+    try {
+      const res = await callFn('auth', { action: 'login' }) // 直接就是原来的 res.result
+      const openid = res.openid
+
+      console.log('登录成功 openid:', openid)
+      wx.setStorageSync('openid', openid)
+      this.setData({ openid })
+
+      const rr = await callFn('auth', { action: 'whoami' })
+      this.setData({
+        isAdmin: !!rr.isAdmin,
+        adminRole: rr.role || null
       })
-      .catch(err => {
-        console.error('登录失败:', err)
-        wx.showToast({ title: '登录失败', icon: 'none' })
-      })
+
+      wx.showToast({ title: '登录成功' })
+    } catch (err) {
+      console.error('登录失败:', err)
+      wx.showToast({ title: err.message || '登录失败', icon: 'none' })
+    }
   },
 
   onSecretTap() {
@@ -229,24 +232,12 @@ Page({
           }
 
           // 2) 让云函数去解析 + 批量写库
-          // ⚠️ 这里你当前代码仍调用 compute（旧逻辑遗留）。本次 Step 3 不动它。
-          const callRes = await wx.cloud.callFunction({
-            name: 'adminImportExcel',
-            data: {
-              fileID: up.fileID
-            }
-          })
+          // ⚠️ 本次只是把调用方式统一为 callFn，不改变云端逻辑
+          const r = await callFn('records', { action: 'admin.importExcel', fileID: up.fileID })
 
           wx.hideLoading()
 
-          const r = (callRes && callRes.result) || {}
-          if (!r.ok) {
-            wx.showToast({ title: r.error || '导入失败', icon: 'none' })
-            this.setData({ importing: false })
-            return
-          }
-
-          // r: { ok:true, total, success, failed, errors:[...] }
+          // r: { total, success, failed, errors:[...] }（ok 已被 callFn 去掉）
           this.setData({ importing: false, importResult: r })
           wx.showModal({
             title: '导入完成',
@@ -257,7 +248,7 @@ Page({
           wx.hideLoading()
           console.error(e)
           this.setData({ importing: false })
-          wx.showToast({ title: '导入异常，请看控制台', icon: 'none' })
+          wx.showToast({ title: e.message || '导入异常，请看控制台', icon: 'none' })
         }
       },
       fail: (err) => {
@@ -310,7 +301,6 @@ Page({
     const x = this._safeInt(inps.x)
     const k = this._safeInt(inps.k, 8)
 
-
     wx.showLoading({ title: '计算中...' })
 
     // ✅ 关键：把 travelModeIndex 合并进 inputs，云端 compute 才能按交通方式分支
@@ -319,46 +309,40 @@ Page({
       travelModeIndex: this.data.travelModeIndex
     }
 
-    wx.cloud.callFunction({
-      name: 'computeAndSave',
-      data: {
-        inputs: payloadInputs,
-        brandIndex: this.data.brandIndex,
-        ageIndex: this.data.ageIndex
-      }
-    }).then(res => {
-      wx.hideLoading()
-      const r = res.result || {}
-
-      if (!r.ok) {
-        wx.showToast({ title: r.error || '计算失败', icon: 'none' })
-        return
-      }
-
-      const finalResult = r.result
-
-      // 首页预览
-      this.setData({ result: finalResult })
-
-      // 存缓存（结果页读取）
-      wx.setStorageSync('calc_result', finalResult)
-      wx.setStorageSync('calc_inputs', {
-        n, x, k,
-        travelModeIndex: this.data.travelModeIndex,
-        travel_km_roundtrip: this.data.inputs.travel_km_roundtrip,
-        travel_station_roundtrip: this.data.inputs.travel_station_roundtrip
-      })
-      wx.setStorageSync('calc_meta', {
-        brandIndex: this.data.brandIndex,
-        ageIndex: this.data.ageIndex
-      })
-
-      wx.navigateTo({ url: '/pages/results/results' })
-    }).catch(err => {
-      wx.hideLoading()
-      console.error('computeAndSave failed:', err)
-      wx.showToast({ title: '计算失败', icon: 'none' })
+    callFn('records', {
+      action: 'save',
+      inputs: payloadInputs,
+      brandIndex: this.data.brandIndex,
+      ageIndex: this.data.ageIndex
     })
+      .then(r => {
+        wx.hideLoading()
+
+        const finalResult = r.result
+
+        // 首页预览
+        this.setData({ result: finalResult })
+
+        // 存缓存（结果页读取）
+        wx.setStorageSync('calc_result', finalResult)
+        wx.setStorageSync('calc_inputs', {
+          n, x, k,
+          travelModeIndex: this.data.travelModeIndex,
+          travel_km_roundtrip: this.data.inputs.travel_km_roundtrip,
+          travel_station_roundtrip: this.data.inputs.travel_station_roundtrip
+        })
+        wx.setStorageSync('calc_meta', {
+          brandIndex: this.data.brandIndex,
+          ageIndex: this.data.ageIndex
+        })
+
+        wx.navigateTo({ url: '/pages/results/results' })
+      })
+      .catch(err => {
+        wx.hideLoading()
+        console.error('records.save failed:', err)
+        wx.showToast({ title: err.message || '计算失败', icon: 'none' })
+      })
   },
 
   // ---------- 工具函数（旧的本地计算已不再使用，但保留不影响运行） ----------
